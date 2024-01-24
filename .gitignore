@@ -1,0 +1,17 @@
+/pths
+/__pycache__
+/wandb
+/trained_models
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# editor, os cache directory
+.vscode/
+.idea/
+__MACOSX/
+
+# virtualenv
+.venv
+venv/
+ENV/
