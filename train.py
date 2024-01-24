@@ -3,7 +3,6 @@ import os.path as osp
 import time
 import math
 import random
-import numpy as np
 from datetime import timedelta
 from argparse import ArgumentParser
 
@@ -36,7 +35,7 @@ def parse_args():
     parser.add_argument('--input_size', type=int, default=1024)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--learning_rate', type=float, default=1e-3)
-    parser.add_argument('--max_epoch', type=int, default=3)
+    parser.add_argument('--max_epoch', type=int, default=100)
     parser.add_argument('--save_interval', type=int, default=5)
     parser.add_argument('--ignore_tags', type=list, default=['masked', 'excluded-region', 'maintable', 'stamp'])
 
@@ -57,7 +56,6 @@ def seed_everything(seed):
     torch.cuda.manual_seed_all(seed)  # if use multi-GPU
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    np.random.seed(seed)
     random.seed(seed)
 
 
@@ -66,7 +64,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
 
     wandb.init(
         project='ocr',
-        entity='cv-2',
+        entity='cv2-ocr',
         name=run_name,
     )
     
