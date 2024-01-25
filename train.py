@@ -61,6 +61,13 @@ def seed_everything(seed):
 
 def do_training(data_dir, model_dir, device, image_size, input_size, num_workers, batch_size,
                 learning_rate, max_epoch, save_interval, ignore_tags, seed, run_name):
+    #create exp dir
+    maxnum=-1
+    for entry in os.scandir('./trained_models'):
+        name=entry.name.split("_")
+        if(entry.is_dir() and len(name)==2 and name[0]=="exp" and name[1].isdigit()):
+            maxnum=max(maxnum,int(name[1]))
+    model_dir+='/exp_{}'.format(maxnum+1)
 
     wandb.init(
         project='ocr',
@@ -125,12 +132,13 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         print('Mean loss: {:.4f} | Elapsed time: {}'.format(
             epoch_loss / num_batches, timedelta(seconds=time.time() - epoch_start)))
 
-        if (epoch + 1) % save_interval == 0:
+        if ((epoch + 1) % save_interval == 0 or epoch + 1 ==max_epoch):
             if not osp.exists(model_dir):
                 os.makedirs(model_dir)
 
-            ckpt_fpath = osp.join(model_dir, 'latest.pth')
+            ckpt_fpath = osp.join(model_dir, 'epoch_{}.pth'.format(epoch + 1))
             torch.save(model.state_dict(), ckpt_fpath)
+            
 
         # wandb logging(epoch)
         wandb.log({
