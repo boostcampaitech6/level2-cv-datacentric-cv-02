@@ -2,6 +2,7 @@
 /__pycache__
 /wandb
 /trained_models
+/predictions
 
 # Jupyter Notebook
 .ipynb_checkpoints
