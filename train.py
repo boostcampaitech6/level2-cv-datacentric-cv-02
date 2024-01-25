@@ -21,7 +21,7 @@ from deteval import calc_deteval_metrics
 import wandb
 import glob
 import re
-import numpy as np
+import cv2
 from pathlib import Path
 
 
@@ -91,6 +91,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                 os.makedirs(ckpt_fpath)
                 
     max_hmean = 0.0
+    min_iou = 100.0
 
     wandb.init(
         project='ocr',
@@ -115,7 +116,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         color_jitter=False
     )
     dataset_train = EASTDataset(dataset_train)
-    dataset_valid = EASTDataset(dataset_valid)
+    # dataset_valid = EASTDataset(dataset_valid)
 
     num_batches = math.ceil(len(dataset_train) / batch_size)
     train_loader = DataLoader(
@@ -166,6 +167,14 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                     'IoU loss': extra_info['iou_loss']
                 })
 
+        
+        # wandb logging(train)
+        lr = optimizer.param_groups[0]["lr"]
+        wandb.log({
+            'Mean loss': epoch_loss / num_batches,
+            "learning rate": lr
+        })
+
         scheduler.step()
 
         print('Mean loss: {:.4f} | Elapsed time: {}'.format(
@@ -174,9 +183,6 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         # valid
         valid_cls, valid_angle, valid_iou = 0.0, 0.0, 0.0
         valid_precision, valid_recall, valid_hmean = 0.0, 0.0, 0.0
-
-        gt_bboxes = {}
-        pred_bboxes = {}
 
         model.eval()
         with torch.no_grad():
@@ -189,53 +195,72 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                     valid_angle += extra_info['angle_loss']
                     valid_iou += extra_info['iou_loss'] 
 
-                    # deteval(f1, precision, recall)
-                    pred_score, pred_geo = model(img.to(device))
-
-                    pred_bboxes = get_bboxes(pred_score.cpu().numpy()[0], pred_geo.cpu().numpy()[0])
-                    gt_bboxes = get_bboxes(gt_score_map.numpy()[0], gt_geo_map.numpy()[0])
-
-                    pred_bboxes = {0: np.expand_dims(pred_bboxes, axis=0)}
-                    gt_bboxes = {0: np.expand_dims(gt_bboxes, axis=0)}
-
-                    metric = calc_deteval_metrics(pred_bboxes, gt_bboxes, transcriptions_dict={0: [""]*len(gt_bboxes[0][0])})
-                    valid_precision += metric['total']['precision']
-                    valid_recall += metric['total']['recall']
-                    valid_hmean += metric['total']['hmean']
-
                     pbar.update(1)
 
+            # wandb logging(valid)
             wandb.log({
                 'valid_cls': valid_cls/len(dataset_valid),
                 'valid_angle': valid_angle/len(dataset_valid),
                 'valid_iou': valid_iou/len(dataset_valid),
-                'valid_precision': valid_precision/len(dataset_valid),
-                'valid_recall': valid_recall/len(dataset_valid),
-                'valid_hmean': valid_hmean/len(dataset_valid),
             })
-        model.train()
+
+        # model.eval()
+        # with torch.no_grad():
+        #     with tqdm(total=len(dataset_valid)) as pbar:
+        #         pbar.set_description('[Epoch {} valid]'.format(epoch + 1))
+        #         for img, word_bboxes, roi_mask, image_fname in dataset_valid:
+        #             gt_bboxes = word_bboxes
+
+        #             image = [cv2.imread(image_fname)[:, :, ::-1]]
+        #             pred_bboxes = detect(model, image, input_size=2048)
+
+        #             gt_bboxes = {0: gt_bboxes.tolist()}
+        #             pred_bboxes = {0: pred_bboxes[0].tolist()}
+        #             metric = calc_deteval_metrics(pred_bboxes, gt_bboxes, transcriptions_dict={0: [""]*len(gt_bboxes[0])})
+                    
+        #             valid_precision += metric['total']['precision']
+        #             valid_recall += metric['total']['recall']
+        #             valid_hmean += metric['total']['hmean']
+
+        #             pbar.update(1)
+            
+        #     wandb.log({
+        #         'valid_precision': valid_precision/len(dataset_valid),
+        #         'valid_recall': valid_recall/len(dataset_valid),
+        #         'valid_hmean': valid_hmean/len(dataset_valid),
+        #     })
+        # model.train()
 
         # model save(last)
         path = osp.join(ckpt_fpath, 'latest.pth')
         torch.save(model.state_dict(), path)
         
         # model save(best)
-        current_hmean = valid_hmean/len(dataset_valid)
-        if current_hmean > max_hmean:
-            print(f'New best model for hmean: {current_hmean:4.4}! saving the best model')
-            max_hmean = current_hmean
-            path = osp.join(ckpt_fpath, 'best_hmean.pth')
-            torch.save(model.state_dict(), path)
+        # current_hmean = valid_hmean/len(dataset_valid)
+        # if current_hmean > max_hmean:
+        #     print(f'New best model for hmean: {current_hmean:4.4}! saving the best model')
+        #     max_hmean = current_hmean
+        #     path = osp.join(ckpt_fpath, 'best_hmean.pth')
+        #     torch.save(model.state_dict(), path)
         
-        print(
-                f"[Val] hmean: {current_hmean:4.4} || "
-                f"best hmean: {max_hmean:4.4}"
-            )
+        # print(
+        #         f"[Val] hmean: {current_hmean:4.4} || "
+        #         f"best hmean: {max_hmean:4.4}"
+        #     )
 
-        # wandb logging(epoch)
-        wandb.log({
-            'Mean loss': epoch_loss / num_batches,
-        })
+        # model save(best)
+        current_iou = valid_iou/len(dataset_valid)
+        if current_iou < min_iou:
+            print(f'New best model for iou: {current_iou:4.4}! saving the best model')
+            min_iou = current_iou
+            path = osp.join(ckpt_fpath, 'best_iou.pth')
+            torch.save(model.state_dict(), path)
+        print(
+                f"[Val] iou: {current_iou:4.4} || "
+                f"best iou: {min_iou:4.4}"
+            )
+        print('=*30')
+
     
     wandb.finish()
 
