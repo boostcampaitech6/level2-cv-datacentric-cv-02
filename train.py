@@ -80,7 +80,7 @@ def increment_path(path, exist_ok=False):
         matches = [re.search(rf"%s(\d+)" % path.stem, d) for d in dirs]
         i = [int(m.groups()[0]) for m in matches if m]
         n = max(i) + 1 if i else 2
-        return f"{path}{n}"
+        return f"{path}_{n}"
 
 
 def do_training(data_dir, model_dir, device, image_size, input_size, num_workers, batch_size,
@@ -117,6 +117,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
     )
     dataset_train = EASTDataset(dataset_train)
     # dataset_valid = EASTDataset(dataset_valid)
+    dataset_valid_EAST = EASTDataset(dataset_valid)
 
     num_batches = math.ceil(len(dataset_train) / batch_size)
     train_loader = DataLoader(
@@ -126,7 +127,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         num_workers=num_workers
     )
     valid_loader = DataLoader(
-        dataset_valid,
+        dataset_valid_EAST,
         batch_size=1,
         shuffle=False,
         num_workers=num_workers
