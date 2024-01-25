@@ -150,7 +150,7 @@ def datum2ufo():
             label = annotation["label_id"]
             if(annotation["label_id"]==0):
                 pass
-            if(annotation["label_id"]==1):
+            elif(annotation["label_id"]==1):
                 temp["illegibility"]= True
             elif(annotation["label_id"]<4):
                 temp["illegibility"]= True
