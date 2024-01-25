@@ -3,6 +3,8 @@ import os
 from PIL import Image
 from argparse import ArgumentParser
 
+ignore_tags = ['masked', 'maintable', 'stamp', 'excluded-region']
+
 
 def parse_args():
     parser = ArgumentParser()
@@ -75,7 +77,6 @@ def ufo2datum():
     ]
     }
     
-    ignore_tags = ['masked', 'maintable', 'stamp', 'excluded-region']
     image_id = 0
     annotation_id = 0
     for image_name, size in image_sizes.items():
@@ -146,6 +147,19 @@ def datum2ufo():
                 "illegibility": False
             }
             
+            label = annotation["label_id"]
+            if(annotation["label_id"]==0):
+                pass
+            if(annotation["label_id"]==1):
+                temp["illegibility"]= True
+            elif(annotation["label_id"]<4):
+                temp["illegibility"]= True
+                temp["tags"].append(ignore_tags[label-2])
+            else:
+                temp["illegibility"]= False
+                temp["tags"].append(ignore_tags[label-2])
+                
+            
             for i in range(0,len(annotation["points"]),2):
                 temp["points"].append([annotation["points"][i],annotation["points"][i+1]])
             
@@ -165,5 +179,5 @@ if __name__ == '__main__':
     args = parse_args()
     if(args.mode=="ufo2datum"):
         ufo2datum()
-    elif(args.modee=="datum2ufo"):
+    elif(args.mode=="datum2ufo"):
         datum2ufo()
