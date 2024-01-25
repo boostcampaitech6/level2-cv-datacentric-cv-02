@@ -139,6 +139,9 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
             ckpt_fpath = osp.join(model_dir, 'epoch_{}.pth'.format(epoch + 1))
             torch.save(model.state_dict(), ckpt_fpath)
             
+            old_chkpt = model_dir+'/epoch_{}.pth'.format(epoch-save_interval*3+1)
+            if ((epoch + 1) // save_interval > 3 and osp.exists(old_chkpt)):
+                os.remove(old_chkpt)
 
         # wandb logging(epoch)
         wandb.log({
