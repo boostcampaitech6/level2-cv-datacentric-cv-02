@@ -12,10 +12,10 @@ from torch.utils.data import DataLoader
 from torch.optim import lr_scheduler
 from tqdm import tqdm
 
-from east_dataset import EASTDataset
+from east_dataset import EASTDataset, generate_score_geo_maps
 from dataset import SceneTextDataset
 from model import EAST
-from detect import get_bboxes
+from detect import get_bboxes, detect
 from deteval import calc_deteval_metrics
 
 import wandb
@@ -46,7 +46,7 @@ def parse_args():
     parser.add_argument('--ignore_tags', type=list, default=['masked', 'excluded-region', 'maintable', 'stamp'])
 
     parser.add_argument('--seed', type=int, default=2)
-    parser.add_argument('--run_name', type=str, default='baseline')
+    parser.add_argument('--run_name', type=str, default='baseline_fold0')
 
     args = parser.parse_args()
 
@@ -103,14 +103,16 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         split='0_train',
         image_size=image_size,
         crop_size=input_size,
-        ignore_tags=ignore_tags
+        ignore_tags=ignore_tags,
+        color_jitter=True
     )
     dataset_valid = SceneTextDataset(
         data_dir,
         split='0_valid',
         image_size=image_size,
         crop_size=input_size,
-        ignore_tags=ignore_tags
+        ignore_tags=ignore_tags,
+        color_jitter=False
     )
     dataset_train = EASTDataset(dataset_train)
     dataset_valid = EASTDataset(dataset_valid)
@@ -170,32 +172,38 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
             epoch_loss / num_batches, timedelta(seconds=time.time() - epoch_start)))
 
         # valid
-        print('[Epoch {} validation...]'.format(epoch + 1))
         valid_cls, valid_angle, valid_iou = 0.0, 0.0, 0.0
         valid_precision, valid_recall, valid_hmean = 0.0, 0.0, 0.0
 
+        gt_bboxes = {}
+        pred_bboxes = {}
+
         model.eval()
         with torch.no_grad():
-            for img, gt_score_map, gt_geo_map, roi_mask in valid_loader:
-                # loss
-                _, extra_info = model.train_step(img, gt_score_map, gt_geo_map, roi_mask)
-                valid_cls += extra_info['cls_loss']
-                valid_angle += extra_info['angle_loss']
-                valid_iou += extra_info['iou_loss'] 
+            with tqdm(total=len(dataset_valid)) as pbar:
+                pbar.set_description('[Epoch {} valid]'.format(epoch + 1))
+                for img, gt_score_map, gt_geo_map, roi_mask in valid_loader:
+                    # loss
+                    _, extra_info = model.train_step(img, gt_score_map, gt_geo_map, roi_mask)
+                    valid_cls += extra_info['cls_loss']
+                    valid_angle += extra_info['angle_loss']
+                    valid_iou += extra_info['iou_loss'] 
 
-                # deteval
-                pred_score, pred_geo = model(img.to(device))
+                    # deteval(f1, precision, recall)
+                    pred_score, pred_geo = model(img.to(device))
 
-                pred_bboxes = get_bboxes(pred_score.cpu().numpy()[0], pred_geo.cpu().numpy()[0])
-                gt_bboxes = get_bboxes(gt_score_map.numpy()[0], gt_geo_map.numpy()[0])
+                    pred_bboxes = get_bboxes(pred_score.cpu().numpy()[0], pred_geo.cpu().numpy()[0])
+                    gt_bboxes = get_bboxes(gt_score_map.numpy()[0], gt_geo_map.numpy()[0])
 
-                pred_bboxes = {0: np.expand_dims(pred_bboxes, axis=0)}
-                gt_bboxes = {0: np.expand_dims(gt_bboxes, axis=0)}
+                    pred_bboxes = {0: np.expand_dims(pred_bboxes, axis=0)}
+                    gt_bboxes = {0: np.expand_dims(gt_bboxes, axis=0)}
 
-                metric = calc_deteval_metrics(pred_bboxes, gt_bboxes, transcriptions_dict={0: [""]*len(gt_bboxes[0][0])})
-                valid_precision += metric['total']['precision']
-                valid_recall += metric['total']['recall']
-                valid_hmean += metric['total']['hmean']
+                    metric = calc_deteval_metrics(pred_bboxes, gt_bboxes, transcriptions_dict={0: [""]*len(gt_bboxes[0][0])})
+                    valid_precision += metric['total']['precision']
+                    valid_recall += metric['total']['recall']
+                    valid_hmean += metric['total']['hmean']
+
+                    pbar.update(1)
 
             wandb.log({
                 'valid_cls': valid_cls/len(dataset_valid),
@@ -214,9 +222,15 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         # model save(best)
         current_hmean = valid_hmean/len(dataset_valid)
         if current_hmean > max_hmean:
+            print(f'New best model for hmean: {current_hmean:4.4}! saving the best model')
             max_hmean = current_hmean
             path = osp.join(ckpt_fpath, 'best_hmean.pth')
             torch.save(model.state_dict(), path)
+        
+        print(
+                f"[Val] hmean: {current_hmean:4.4} || "
+                f"best hmean: {max_hmean:4.4}"
+            )
 
         # wandb logging(epoch)
         wandb.log({
