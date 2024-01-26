@@ -233,8 +233,16 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         # model.train()
 
         # model save(last)
-        path = osp.join(ckpt_fpath, 'latest.pth')
-        torch.save(model.state_dict(), path)
+        print('Mean loss: {:.4f} | Elapsed time: {}'.format(
+            epoch_loss / num_batches, timedelta(seconds=time.time() - epoch_start)))
+
+        if ((epoch + 1) % save_interval == 0 or epoch + 1 ==max_epoch):
+            path = osp.join(model_dir, 'epoch_{}.pth'.format(epoch + 1))
+            torch.save(model.state_dict(), path)
+            
+            old_chkpt = model_dir+'/epoch_{}.pth'.format(epoch-save_interval*3+1)
+            if ((epoch + 1) // save_interval > 3 and osp.exists(old_chkpt)):
+                os.remove(old_chkpt)
         
         # model save(best)
         # current_hmean = valid_hmean/len(dataset_valid)
@@ -254,7 +262,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         if current_iou < min_iou:
             print(f'New best model for iou: {current_iou:4.4}! saving the best model')
             min_iou = current_iou
-            path = osp.join(ckpt_fpath, 'best_iou.pth')
+            path = osp.join(ckpt_fpath, 'best_iou_epoch{}.pth'.format(epoch+1))
             torch.save(model.state_dict(), path)
         print(
                 f"[Val] iou: {current_iou:4.4} || "
