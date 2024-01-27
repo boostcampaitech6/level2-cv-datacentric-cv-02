@@ -6,8 +6,8 @@ import os
 source_dir = '../data/medical/ufo/train.json'
 target_dir = '../dataaug/ufo1.json'
 output_dir = '../data/medical/ufo/merged.json'
-iter_limit = 10
-
+start_idx = 0
+num_iter = 10
 
 # load annotation files
 with open(source_dir) as f:
@@ -17,9 +17,8 @@ with open(target_dir) as f:
     aug_data = json.load(f)
     print(f'{len(aug_data["images"].keys())} target data are loaded.')
 
-# merge annotations with iter_limit
-for i, key in enumerate(aug_data['images'].keys()):
-    if i == iter_limit: break
+# merge annotations with proper range
+for key in list(aug_data['images'].keys())[start_idx:(start_idx+num_iter)]:
     ori_data['images'].setdefault(key, {})
     ori_data['images'][key] = aug_data['images'][key]
 
