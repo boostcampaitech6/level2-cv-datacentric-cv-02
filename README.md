@@ -55,6 +55,9 @@ level2-objectdetection-cv-02
 .
 .
 |
+|──ensemble
+|   |── ensemble.ipynb
+|   └── wbf_ensemble.py
 |── convert_ann_format.py
 |── dataset.py
 |── detect.py
@@ -100,4 +103,18 @@ num_iter = 120
 3. Make Custom Noise, 프린터기에서 발생하는 노이즈와 유사한 노이즈를 발생시킬 수 있습니다.
 
 ### [WBF ensemble](./docs/wbf_ensemble.md)
-1. WBF ensemble 특성상 bbox 형태가 polygon이 아닌 사각형 형태여야 하기 때문에 test.json을 coco format으로 변환
+1. WBF ensemble 특성상 bbox 형태가 polygon이 아닌 사각형 형태여야 하기 때문에 coco format으로 변환된 test.json을 생성합니다.
+```py
+# test dataset이 있는 폴더를 입력합니다
+test_folder = '/data/ephemeral/home/data/medical/img/test/'
+```
+2. 앙상블 하고자 하는 파일을 업로드합니다.
+```py
+# 앙상블 하고싶은 파일을 모아둔 폴더를 입력합니다
+for file_name in os.listdir('/data/ephemeral/home/data/medical/ensemble/json'):
+```
+3. coco format으로 저장된 test.json파일의 경로를 입력합니다.
+```py
+annotation = '/data/ephemeral/home/data/medical/output_ensemble/test.json'
+```
+4.  iou_thr, skip_box_thr, weight 를 조정해 WBF ensemble을 진행합니다. 
