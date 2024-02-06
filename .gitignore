@@ -17,3 +17,6 @@ __MACOSX/
 .venv
 venv/
 ENV/
+
+# upstage api key
+constants.py
