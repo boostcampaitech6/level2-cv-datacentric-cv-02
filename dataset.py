@@ -7,6 +7,7 @@ import torch
 import numpy as np
 import cv2
 import albumentations as A
+import imgaug.augmenters as iaa
 from torch.utils.data import Dataset
 from shapely.geometry import Polygon
 
@@ -48,6 +49,48 @@ def move_points(vertices, index1, index2, r, coef):
         vertices[y2_index] += ratio * length_y
     return vertices
 
+def dotCluster(image):
+    height, width, _ = image.shape
+    
+    #np.random.seed(0)
+    
+    x_anchor = np.random.choice(28, np.random.choice([3, 6, 8]))
+    while len(x_anchor) == 0: 
+        x_anchor = np.random.choice(28, np.random.choice([3, 6, 8]))   
+    y_anchor = np.random.choice(28, np.random.choice([3, 6, 8]))
+    while len(y_anchor) == 0: 
+        y_anchor = np.random.choice(28, np.random.choice([3, 6, 8]))
+    
+    scale = 10
+    
+    for i in range(28):
+        for j in range(28):
+            if j in x_anchor and i in y_anchor: 
+                for _ in range(int(np.random.normal(200, 5))):
+                    dot_color = (0, 0, 0)  # (B, G, R)
+                    x=min(int(width/28*j+np.random.normal(0, 3/210*width)),width-1)
+                    y=min(int(height/28*i+np.random.normal(0, 6/297*height)),height-1)
+                    image[y, x] = dot_color
+                    image[min(y+1,height-1), x] = dot_color
+                    image[y, min(x+1,width-1)] = dot_color
+                    image[min(y+1,height-1), min(x+1,width-1)] = dot_color
+
+    return image
+
+    # # Visualize the original and augmented images side by side
+    # fig, axes = plt.subplots(1, 2, figsize=(30, 15))
+    # axes[0].imshow(image)
+    # axes[0].set_title('Augmented')
+
+    # # Remove the axis labels
+    # for ax in axes:
+    #     ax.axis('off')
+
+    # # Adjust the spacing between subplots
+    # plt.tight_layout()
+
+    # # Show the plot
+    # plt.show()
 
 def shrink_poly(vertices, coef=0.3):
     '''shrink the text region
@@ -218,6 +261,8 @@ def crop_img(img, vertices, labels, length):
     cnt = 0
     while flag and cnt < 1000:
         cnt += 1
+        start_w = int(torch.rand(1).item() * remain_w)
+        start_h = int(torch.rand(1).item() * remain_h)
         start_w = int(torch.rand(1).item() * remain_w)
         start_h = int(torch.rand(1).item() * remain_h)
         flag = is_cross_text([start_w, start_h], length, new_vertices[labels==1,:])
@@ -399,14 +444,35 @@ class SceneTextDataset(Dataset):
         image = np.array(image)
 
         funcs = []
+        
+        rand=torch.rand(1).item()
+        if(rand<0.13):
+            iaa_transform = iaa.Sequential([
+                iaa.Sometimes(0.15, iaa.OneOf([
+                    iaa.CoarsePepper(0.01, size_percent=(0.2, 0.2)),
+                    iaa.CoarsePepper(0.02, size_percent=(0.2, 0.2))
+                ]))
+            ])
+            image = iaa_transform(image=image)
+        elif(rand<0.19):
+            image = dotCluster(image)
+
+        #custom aug
+        # funcs.append(A.OneOf([
+        #     A.CLAHE(clip_limit=1.0, tile_grid_size=(8, 8)),
+        #     A.Sharpen(alpha=(0.2, 0.5), lightness=(0.5, 1.0))
+        # ], p=0.5))
+        
         if self.color_jitter:
             funcs.append(A.ColorJitter(0.5, 0.5, 0.5, 0.25))
         if self.normalize:
             funcs.append(A.Normalize())
         transform = A.Compose(funcs)
-
         image = transform(image=image)['image']
+        
+        
         word_bboxes = np.reshape(vertices, (-1, 4, 2))
         roi_mask = generate_roi_mask(image, vertices, labels)
 
         return image, word_bboxes, roi_mask
+
