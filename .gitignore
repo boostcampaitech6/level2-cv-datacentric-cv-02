@@ -1,0 +1,19 @@
+/merged_annotation
+/pths
+/__pycache__
+/wandb
+/trained_models
+/predictions
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# editor, os cache directory
+.vscode/
+.idea/
+__MACOSX/
+
+# virtualenv
+.venv
+venv/
+ENV/
