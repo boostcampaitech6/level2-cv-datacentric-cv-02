@@ -159,13 +159,24 @@ def datum2ufo():
                 temp["illegibility"]= False
                 temp["tags"].append(ignore_tags[label-2])
                 
-            
-            for i in range(0,len(annotation["points"]),2):
-                temp["points"].append([annotation["points"][i],annotation["points"][i+1]])
+            if(annotation["type"]=="bbox"): #bbox
+                temp["points"]=[[annotation["bbox"][0],annotation["bbox"][1]],
+                                [annotation["bbox"][0]+annotation["bbox"][2],annotation["bbox"][1]],
+                                [annotation["bbox"][0],annotation["bbox"][1]+annotation["bbox"][3]],
+                                [annotation["bbox"][0]+annotation["bbox"][2],annotation["bbox"][1]+annotation["bbox"][3]],              
+                ]
+            else:#polygon
+                for i in range(0,len(annotation["points"]),2):
+                    temp["points"].append([annotation["points"][i],annotation["points"][i+1]])
+
             
             words[cnt]=temp
             cnt+=1
-        image_name=image["id"].split("/")[-1]+".jpg"
+            
+        if("/" in image["id"]):
+            image_name=image["id"].split("/")[-1]+".jpg"
+        else:
+            image_name=image["id"]+".jpg"
         images[image_name]={"words":words}
         
         with open('../ufo1.json', 'w') as outfile:
